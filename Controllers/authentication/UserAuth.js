@@ -111,9 +111,6 @@ const HandleConfirmOtp = async (req, res) => {
         });
 
         await user.save();
-
-
-
         res.status(200).send({
             success: true,
             message: 'OTP verified successfully',

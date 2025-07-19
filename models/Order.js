@@ -1,20 +1,43 @@
 import mongoose from 'mongoose';
 
 const OrdersSchema = new mongoose.Schema({
-    ProductId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Product'
-    },
+    Product:[
+        {
+            ProductId: {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: 'Product'
+            },
+            units: {
+                type: String,
+                required: true
+            }
+        }
+    ],
     DeliveryTime: {
         type: String,
+    },
+    totalAmount:{
+        type:Number
     },
     DeliveryBy: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'DeliveryBoy'
     },
+    Status:{
+        type:String,
+        enum: ['prepare','current', 'cancel','completed']
+    },
     OrderBy: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User'
+    },
+    paymentMethod:{
+        type:String,
+        default:'COD'
+    },
+    OrderOtp:{
+        type:String,
+        default:"498273"
     },
     createdAt: {
         type: Date,

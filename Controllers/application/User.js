@@ -144,5 +144,51 @@ const deg2rad = (deg) => {
     return deg * (Math.PI / 180);
 };
 
+
+const HandleGetUserLocation = async (req, res) => {
+    const userId = req.user._id;
+
+    try {
+        const user = await User.findById(userId);
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found"
+            });
+        }
+
+        if (!user.address || !user.address.location || !user.address.location.coordinates?.length) {
+            return res.status(404).json({
+                success: false,
+                message: "User location not set"
+            });
+        }
+
+        const { formatted, location } = user.address;
+
+        return res.status(200).json({
+            success: true,
+            message: "User location fetched successfully",
+            location: {
+                address: formatted,
+                coordinates: location.coordinates // [longitude, latitude]
+            },
+            mobile:user.mobile
+        });
+
+    } catch (error) {
+        console.error("Error fetching user location:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error",
+            error: error.message
+        });
+    }
+};
+
+
 export { HandlePreviewUserLocation,
-    HandleSaveUserLocation };
+    HandleSaveUserLocation,
+    HandleGetUserLocation
+ };

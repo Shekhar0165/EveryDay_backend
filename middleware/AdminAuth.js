@@ -21,8 +21,8 @@ export const AdminAuth = async (req, res, next) => {
 
         try {
             const decoded = jwt.verify(accessToken, JWT_CONFIG.ACCESS_TOKEN_SECRET);
-            const admin = await Admin.findById(decoded._id);
-            req.admin = decoded;
+            const admin = await Admin.findById(decoded.id);
+            req.admin = admin;
             next();
         } catch (error) {
             console.log(error);
