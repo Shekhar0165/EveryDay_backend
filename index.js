@@ -5,6 +5,7 @@ import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import http from 'http';
 import { Server } from 'socket.io';
+import { createClient } from 'redis';
 import AdminLogin from './routes/AdminLogin.js'
 import Label from './routes/api/Label.js';
 import Category from './routes/api/Categroy.js';
@@ -28,6 +29,22 @@ dbconnect.connect()
     console.error('Database connection failed', err);
   });
 
+
+  
+const client = createClient({
+    url: process.env.Redis_URL,
+    socket: {
+        connectTimeout: 30000,
+        tls: process.env.Redis_URL?.includes('rediss://'), // Auto-detect SSL
+    }
+});
+
+
+client.connect()
+    .then(() => console.log('✅ Connected to Redis Cloud'))
+    .catch(console.error);
+
+
 const io = new Server(server, {
   cors: {
     origin: corsOptions.origin,
@@ -36,6 +53,10 @@ const io = new Server(server, {
 });
 
 
+app.use((req, res, next) => {
+  req.client = client;
+  next();
+});
 
 
 app.use(express.json());
@@ -62,8 +83,8 @@ app.get('/', (req, res) => {
 
 io.on('connection', async (socket) => {
   console.log('User connected:', socket.id);
-  HandleConnectToAdmin(socket,io);
-  HandleTrackOrder(socket,io);
+  HandleConnectToAdmin(socket,io,client);
+  HandleTrackOrder(socket,io,client);
 });
 
 server.listen(8000, () => {

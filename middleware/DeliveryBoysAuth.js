@@ -19,7 +19,6 @@ const DeliveryBoyAuth = async (req, res, next) => {
     
     // Check if user still exists
     const boy = await DeliveryBoy.findById(decoded.id);
-    console.log(boy)
     if (!boy) {
       return res.status(401).json({ 
         message: 'User not found' 
@@ -33,6 +32,27 @@ const DeliveryBoyAuth = async (req, res, next) => {
       message: 'Invalid or expired token' 
     });
   }
+};
+
+
+export const getBoyDataFromToken = async (token) => {
+  if (!token) {
+    throw new Error('Access token required');
+  }
+
+  let decoded;
+  try {
+    decoded = jwt.verify(token, process.env.JWT_SECRET);
+  } catch (err) {
+    throw new Error('Invalid or expired token');
+  }
+
+  const boy = await DeliveryBoy.findById(decoded.id);
+  if (!boy) {
+    throw new Error('User not found');
+  }
+
+  return boy;
 };
 
 export default DeliveryBoyAuth;
