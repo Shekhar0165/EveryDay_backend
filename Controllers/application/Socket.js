@@ -29,8 +29,8 @@ const HandleSendOrderToShop = async (completeOrder, user) => {
   console.log('Sending complete order to admin:', completeOrder);
 
   try {
-    // Store order tracking info in Redis
-    await redisClient.setex(
+    // Store order tracking info in Redis (updated for Redis client v4+)
+    await redisClient.setEx(
       `${REDIS_KEYS.ORDER_TRACKING}${completeOrder._id}`,
       86400, // 24 hours expiry
       JSON.stringify({
@@ -66,7 +66,7 @@ const HandleAfterAssignDeliveryBoys = async (orderId, deliveryBoyId) => {
       parsedData.status = 'assigned';
       parsedData.assignedAt = new Date();
       
-      await redisClient.setex(trackingKey, 86400, JSON.stringify(parsedData));
+      await redisClient.setEx(trackingKey, 86400, JSON.stringify(parsedData));
     }
 
     globalSocket.emit("Assign-Delivery_boy", { orderId, deliveryBoyId });
@@ -131,15 +131,15 @@ const HandleTrackOrder = (socket, io, client) => {
         lastUpdated: new Date().toISOString()
       };
 
-      // Store location with 1 hour expiry (adjust as needed)
-      await redisClient.setex(
+      // Store location with 1 hour expiry (updated for Redis client v4+)
+      await redisClient.setEx(
         `${REDIS_KEYS.DELIVERY_LOCATION}${deliveryboy._id}`,
         3600,
         JSON.stringify(locationData)
       );
 
       // Also store mapping from order to delivery boy location
-      await redisClient.setex(
+      await redisClient.setEx(
         `${REDIS_KEYS.ORDER_TRACKING}${orderId}_location`,
         3600,
         JSON.stringify(locationData)
@@ -211,7 +211,7 @@ const HandleTrackOrder = (socket, io, client) => {
 
       // Store user's socket ID in Redis for location updates
       if (userId) {
-        await redisClient.setex(
+        await redisClient.setEx(
           `${REDIS_KEYS.USER_SOCKET}${userId}`,
           86400, // 24 hours
           socket.id
@@ -256,7 +256,7 @@ const HandleTrackOrder = (socket, io, client) => {
       
       if (deliveryboy) {
         // Store delivery boy socket ID
-        await redisClient.setex(
+        await redisClient.setEx(
           `${REDIS_KEYS.DELIVERY_BOY_SOCKET}${deliveryboy._id}`,
           86400,
           socket.id
@@ -275,7 +275,7 @@ const HandleTrackOrder = (socket, io, client) => {
   // Handle user disconnect
   socket.on('disconnect', async () => {
     try {
-      // Clean up user socket mapping
+      // Clean up user socket mapping - Updated for Redis client v4+
       const userKeys = await redisClient.keys(`${REDIS_KEYS.USER_SOCKET}*`);
       for (const key of userKeys) {
         const socketId = await redisClient.get(key);
@@ -324,7 +324,7 @@ const updateOrderStatus = async (orderId, status) => {
       parsedData.status = status;
       parsedData.statusUpdatedAt = new Date();
       
-      await redisClient.setex(trackingKey, 86400, JSON.stringify(parsedData));
+      await redisClient.setEx(trackingKey, 86400, JSON.stringify(parsedData));
       
       // Notify user about status change
       const userId = parsedData.userId;
