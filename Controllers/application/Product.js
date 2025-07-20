@@ -652,6 +652,115 @@ const HandleGetAddtoCartProduct = async(req,res)=>{
     }
 }
 
+
+const getSimilarProducts = async (req, res) => {
+  try {
+    const { productId } = req.params;
+    const { limit = 10 } = req.query;
+
+    // Validate productId
+    if (!mongoose.Types.ObjectId.isValid(productId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid product ID'
+      });
+    }
+
+    // Get the current product to find its label and category
+    const currentProduct = await Product.findById(productId);
+
+    if (!currentProduct) {
+      return res.status(404).json({
+        success: false,
+        message: 'Product not found'
+      });
+    }
+
+    // Find similar products using simple queries
+    const [sameLabelProducts, sameCategoryProducts, sameTypeProducts, randomProducts] = await Promise.all([
+      // Products with same label
+      Product.find({
+        _id: { $ne: productId },
+        LabelId: currentProduct.LabelId,
+        Stock: { $gt: 0 }
+      }).sort({ Rating: -1 }).limit(5),
+
+      // Products with same category (excluding same label ones)
+      Product.find({
+        _id: { $ne: productId },
+        LabelId: { $ne: currentProduct.LabelId },
+        CategoryId: currentProduct.CategoryId,
+        Stock: { $gt: 0 }
+      }).sort({ Rating: -1 }).limit(3),
+
+      // Products with same type (excluding above)
+      Product.find({
+        _id: { $ne: productId },
+        LabelId: { $ne: currentProduct.LabelId },
+        CategoryId: { $ne: currentProduct.CategoryId },
+        Type: currentProduct.Type,
+        Stock: { $gt: 0 }
+      }).sort({ Rating: -1 }).limit(2),
+
+      // Random products as fallback
+      Product.find({
+        _id: { $ne: productId },
+        Stock: { $gt: 0 }
+      }).sort({ Rating: -1 }).limit(parseInt(limit))
+    ]);
+
+    // Combine results with priority
+    let similarProducts = [];
+    
+    // Add same label products (highest priority)
+    similarProducts = [...similarProducts, ...sameLabelProducts.map(p => ({ ...p.toObject(), similarityScore: 3 }))];
+    
+    // Add same category products (medium priority)
+    similarProducts = [...similarProducts, ...sameCategoryProducts.map(p => ({ ...p.toObject(), similarityScore: 2 }))];
+    
+    // Add same type products (low priority)
+    similarProducts = [...similarProducts, ...sameTypeProducts.map(p => ({ ...p.toObject(), similarityScore: 1 }))];
+    
+    // If we don't have enough, add random products
+    if (similarProducts.length < parseInt(limit)) {
+      const needed = parseInt(limit) - similarProducts.length;
+      const existingIds = new Set(similarProducts.map(p => p._id.toString()));
+      const additionalProducts = randomProducts
+        .filter(p => !existingIds.has(p._id.toString()))
+        .slice(0, needed)
+        .map(p => ({ ...p.toObject(), similarityScore: 0 }));
+      
+      similarProducts = [...similarProducts, ...additionalProducts];
+    }
+
+    // Limit to requested number
+    similarProducts = similarProducts.slice(0, parseInt(limit));
+
+    res.status(200).json({
+      success: true,
+      message: 'Similar products retrieved successfully',
+      products: similarProducts,
+      totalCount: similarProducts.length,
+      currentProduct: {
+        _id: currentProduct._id,
+        ProductName: currentProduct.ProductName,
+        LabelId: currentProduct.LabelId,
+        CategoryId: currentProduct.CategoryId
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching similar products:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+
+
 export {
     HandleGetPrductByCetagroy,
     HandleAddPrduct,
@@ -663,5 +772,6 @@ export {
     HandleAddToCartProduct,
     HandleUpdateUnitFromCart,
     HandleRemoveToCart,
-    HandleGetAddtoCartProduct
+    HandleGetAddtoCartProduct,
+    getSimilarProducts
 }

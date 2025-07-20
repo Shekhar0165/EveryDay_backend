@@ -12,7 +12,8 @@ import {
     HandleAddToCartProduct,
     HandleUpdateUnitFromCart,
     HandleRemoveToCart,
-    HandleGetAddtoCartProduct
+    HandleGetAddtoCartProduct,
+    getSimilarProducts
 } from "../../Controllers/application/Product.js";
 import { AdminAuth } from "../../middleware/AdminAuth.js";
 import auth from "../../middleware/auth.js";
@@ -26,6 +27,7 @@ router.get("/get/best-selling", HandleGetBestSellerProductFromEachLabels);
 router.post("/add", AdminAuth, HandleAddPrduct);
 router.put("/update/:productId", AdminAuth, HandleUpdatePrduct);
 router.delete("/delete/:productId", AdminAuth, HandleDeletePrduct);
+router.get('/similar/:productId', getSimilarProducts);
 
 
 
