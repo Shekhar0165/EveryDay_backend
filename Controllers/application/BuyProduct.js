@@ -81,13 +81,22 @@ const HandlePlaceOrder = async (req, res) => {
         }
         const otp =Math.floor(100000 + Math.random() * 900000).toString();
 
+        let DeliveryCharge = 0; // Default delivery charge
+
+        if(totalAmount < 150) {
+            // Apply delivery charge
+            totalAmount += 20;
+            DeliveryCharge = 20;
+        }
+
         // Create and save order
         const newOrder = new Orders({
             Product: updatedProductList,
             OrderBy: UserId,
             Status: "prepare",
             totalAmount: totalAmount,
-            OrderOtp:otp
+            OrderOtp:otp,
+            DeliveryCharge: DeliveryCharge
         });
         await newOrder.save({ session });
 

@@ -19,7 +19,7 @@ const HandleConnectToAdmin = (socket, io, client) => {
 };
 
 const HandleSendOrderToShop = async (completeOrder, user) => {
-  console.log('completeOrder', completeOrder, 'user', user);
+  console.log('completeOrder', completeOrder);
 
   if (!globalSocket || !globalSocket.connected) {
     console.error('Socket not connected to admin');
@@ -32,7 +32,7 @@ const HandleSendOrderToShop = async (completeOrder, user) => {
     // Store order tracking info in Redis (updated for Redis client v4+)
     await redisClient.setEx(
       `${REDIS_KEYS.ORDER_TRACKING}${completeOrder._id}`,
-      86400, // 24 hours expiry
+      43200, // 12 hours expiry
       JSON.stringify({
         orderId: completeOrder._id,
         userId: user._id,
@@ -66,7 +66,7 @@ const HandleAfterAssignDeliveryBoys = async (orderId, deliveryBoyId) => {
       parsedData.status = 'assigned';
       parsedData.assignedAt = new Date();
       
-      await redisClient.setEx(trackingKey, 86400, JSON.stringify(parsedData));
+      await redisClient.setEx(trackingKey, 43200, JSON.stringify(parsedData));
     }
 
     globalSocket.emit("Assign-Delivery_boy", { orderId, deliveryBoyId });
@@ -77,9 +77,7 @@ const HandleAfterAssignDeliveryBoys = async (orderId, deliveryBoyId) => {
   }
 };
 
-const HandleNotifyToShop = () => {
-  // Implementation for shop notifications
-};
+
 
 const HandleTrackOrder = (socket, io, client) => {
   
@@ -324,7 +322,7 @@ const updateOrderStatus = async (orderId, status) => {
       parsedData.status = status;
       parsedData.statusUpdatedAt = new Date();
       
-      await redisClient.setEx(trackingKey, 86400, JSON.stringify(parsedData));
+      await redisClient.setEx(trackingKey, 43200, JSON.stringify(parsedData));
       
       // Notify user about status change
       const userId = parsedData.userId;
@@ -344,6 +342,36 @@ const updateOrderStatus = async (orderId, status) => {
   }
 };
 
+
+const HandleNotifyDeliveryBoy = async (orderId, deliveryBoyId, message) => {
+  if (!globalSocket || !globalSocket.connected) {
+    console.error('Socket not connected');
+    return;
+  }
+
+  const deliveryBoySocketId = await redisClient.get(`${REDIS_KEYS.DELIVERY_BOY_SOCKET}${deliveryBoyId}`);
+  console.log('Delivery Boy Socket ID:', deliveryBoySocketId);
+  if (deliveryBoySocketId) {
+    globalIo.to(deliveryBoySocketId).emit('order-notification', {
+      orderId: orderId,
+      message: message
+    });
+  }
+
+};
+
+const HandleNotifyToShop = async (shopId, orderId, message) => {
+  if (!globalSocket || !globalSocket.connected) {
+    console.error('Socket not connected to admin');
+    return;
+  }
+
+  globalSocket.emit('shop-notification', {
+    orderId: orderId,
+    message: message
+  });
+};
+
 export {
   HandleConnectToAdmin,
   HandleSendOrderToShop,
@@ -351,5 +379,6 @@ export {
   HandleNotifyToShop,
   HandleTrackOrder,
   getCurrentDeliveryLocation,
-  updateOrderStatus
+  updateOrderStatus,
+  HandleNotifyDeliveryBoy
 };

@@ -21,7 +21,8 @@ const OrdersSchema = new mongoose.Schema({
     },
     DeliveryBy: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'DeliveryBoy'
+        ref: 'DeliveryBoy',
+        default: null
     },
     Status:{
         type:String,
@@ -34,6 +35,10 @@ const OrdersSchema = new mongoose.Schema({
     paymentMethod:{
         type:String,
         default:'COD'
+    },
+    DeliveryCharge:{
+        type:Number,
+        default:0
     },
     OrderOtp:{
         type:String,

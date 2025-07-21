@@ -2,6 +2,8 @@ import User from "../../models/User.js"
 import DeliveryBoy from '../../models/DeliveryBoy.js'
 import Orders from "../../models/Order.js"
 import Product from "../../models/Product.js"
+import { HandleNotifyDeliveryBoy, HandleNotifyToShop } from "./Socket.js"
+import mongoose from "mongoose";
 
 
 const HandleAddToCard = async (req, res) => {
@@ -320,9 +322,69 @@ const HandleGetOrderForUser = async (req, res) => {
         });
     }
 };
+
+
+
+const HandleCancelOrder = async (req, res) => {
+    const { orderId } = req.params;
+    const userId = req.user._id;
+    console.log('Cancel Order Request:', orderId, userId);
+    try {
+        const order = await Orders.findById(orderId);
+        if (!order) {
+            return res.status(404).json({
+                success: false,
+                message: "Order not found"
+            });
+        }
+
+        if (order.OrderBy.toString() !== userId.toString()) {
+            return res.status(403).json({
+                success: false,
+                message: "You are not authorized to cancel this order"
+            });
+        }
+        if (order.Status === "cancel") {
+            return res.status(400).json({
+                success: false,
+                message: "Order is already cancelled"
+            });
+        }
+
+        order.Status = "cancel";
+        await order.save();
+
+        if(order.DeliveryBy) {
+            const deliveryBoy = await DeliveryBoy.findById(order.DeliveryBy);
+            if (deliveryBoy) {
+                deliveryBoy.DeliveryNotCompletedOrlate.push(order._id);
+                deliveryBoy.OnDelivery = null; // Reset OnDelivery status
+                await deliveryBoy.save();
+            }
+            HandleNotifyDeliveryBoy(order.DeliveryBy, order._id, "Order cancelled by user");
+        }
+
+        HandleNotifyToShop(order.Shop, order._id, "Order cancelled by user");
+        return res.status(200).json({
+            success: true,
+            message: "Order cancelled successfully",
+            data: order
+        });
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: "Internal Server Error",
+            error: error.message,
+        });
+    }
+}
+
+
+
 export {
     HandleAddToCard,
     HandleGetOrder,
     HandleGetOneOrderFromId,
-    HandleGetOrderForUser
+    HandleGetOrderForUser,
+    HandleCancelOrder
 }
