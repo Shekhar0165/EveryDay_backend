@@ -5,6 +5,6 @@ import { AdminAuth } from '../../middleware/AdminAuth.js';
 
 const router = express.Router();
 
-router.get('/labels',AdminAuth, handleGetLabels);
+router.get('/labels', handleGetLabels);
 
 export default router;
