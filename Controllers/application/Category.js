@@ -1,3 +1,4 @@
+import cloudinary from "../../config/Cloudinary.js";
 import Category from "../../models/Categroy.js";
 import Label from "../../models/Label.js";
 import Product from "../../models/Product.js";
@@ -101,9 +102,18 @@ const HandleDeleteCetagroy = async (req, res) => {
 
         // Delete all products under this category
         await Promise.all(category.products.map(async (productId) => {
+            const product = await Product.findById(productId);
+            if (product && product.imagePublicId) {
+                try {
+                    // Use the stored public ID directly
+                    await cloudinary.uploader.destroy(product.imagePublicId);
+                } catch (err) {
+                    // Log error but continue
+                    console.error(`Failed to delete image from Cloudinary: ${product.imagePublicId}`, err);
+                }
+            }
             await Product.findByIdAndDelete(productId);
         }));
-
         // Now delete the category itself
         await Category.findByIdAndDelete(id);
 
@@ -124,9 +134,9 @@ const HandleUpdateCetagroy = async (req, res) => {
             return res.status(404).json({ success: false, message: "Category not found" });
         }
 
-        const newCategory = await Category.find({name:name})
+        const newCategory = await Category.find({ name: name })
 
-        if(newCategory){
+        if (newCategory) {
             return res.status(404).json({ success: false, message: `${name} already exist` });
         }
 
