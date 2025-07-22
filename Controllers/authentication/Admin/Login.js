@@ -51,13 +51,17 @@ const AdminAuth = async (req, res) => {
         const tokens = generateTokens(admin);
 
         res.cookie('accessToken', tokens.accessToken, {
-            sameSite: "None", // Required for cross-origin subdomains
+            httpOnly: true,               // Prevent access from JavaScript (RECOMMENDED for security)
+            secure: true,                 // Required for SameSite=None
+            sameSite: "None",             // Allow cross-origin
             path: '/',
             maxAge: 1 * 24 * 60 * 60 * 1000 // 1 day
         });
 
-        // Set refresh token cookie
         res.cookie('refreshToken', tokens.refreshToken, {
+            httpOnly: true,
+            secure: true,
+            sameSite: "None",
             path: '/',
             maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
         });
