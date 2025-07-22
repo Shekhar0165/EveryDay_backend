@@ -2,7 +2,7 @@ const AllowedOrigin = [
     'http://localhost:3000',
     'http://localhost:3001',
     'http://localhost:8000',
-    'http://127.0.0.1:3000',
+    'https://unifhub.fun',
     'https://fatafat-phi.vercel.app',
     'http://localhost:8081',
 ]
