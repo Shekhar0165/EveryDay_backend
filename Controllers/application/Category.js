@@ -1,6 +1,7 @@
 import Category from "../../models/Categroy.js";
 import Label from "../../models/Label.js";
 import Product from "../../models/Product.js";
+import mongoose from "mongoose";
 
 // Get all categories
 const HandleGetAllCetagroy = async (req, res) => {

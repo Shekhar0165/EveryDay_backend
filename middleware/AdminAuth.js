@@ -10,7 +10,11 @@ const JWT_CONFIG = {
 
 export const AdminAuth = async (req, res, next) => {
     try {
-        const accessToken = req.cookies.accessToken;
+        const authHeader = req.headers['authorization'];
+        const accessToken = authHeader && authHeader.split(' ')[1];
+
+        console.log('Access Token:', accessToken);
+
 
         if (!accessToken) {
             return res.status(401).json({

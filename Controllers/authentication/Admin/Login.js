@@ -55,7 +55,6 @@ const AdminAuth = async (req, res) => {
             httpOnly: true,
             secure: true,
             sameSite: "None",
-            domain: ".unifhub.fun", // This allows sharing with unifhub.fun and all subdomains
             path: '/',
             maxAge: 1 * 24 * 60 * 60 * 1000 // 1 day
         });
@@ -65,7 +64,6 @@ const AdminAuth = async (req, res) => {
             httpOnly: true,
             secure: true,
             sameSite: "None",
-            domain: ".unifhub.fun", // Same here
             path: '/',
             maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
         });
