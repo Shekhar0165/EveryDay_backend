@@ -50,21 +50,26 @@ const AdminAuth = async (req, res) => {
         }
         const tokens = generateTokens(admin);
 
+        // Set access token cookie
         res.cookie('accessToken', tokens.accessToken, {
-            httpOnly: true,               // Prevent access from JavaScript (RECOMMENDED for security)
-            secure: true,                 // Required for SameSite=None
-            sameSite: "None",             // Allow cross-origin
+            httpOnly: true,
+            secure: true,
+            sameSite: "None",
+            domain: ".fatafat.unifhub.fun", // leading dot allows sharing across all subdomains
             path: '/',
             maxAge: 1 * 24 * 60 * 60 * 1000 // 1 day
         });
 
+        // Set refresh token cookie
         res.cookie('refreshToken', tokens.refreshToken, {
             httpOnly: true,
             secure: true,
             sameSite: "None",
+            domain: ".fatafat.unifhub.fun", // same here
             path: '/',
             maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
         });
+
 
         admin.refreshToken = tokens.refreshToken;
         await admin.save();
