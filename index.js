@@ -15,6 +15,7 @@ import User from './routes/api/User.js';
 import UserAuth from './routes/UserAuth.js';
 import BuyProduct from './routes/api/BuyProduct.js';
 import DeliveryBoys from './routes/api/DeliveryBoys.js';
+import Refunds from './routes/api/Refunds.js';
 import { HandleConnectToAdmin ,HandleTrackOrder} from './Controllers/application/Socket.js';
 
 const app = express();
@@ -73,6 +74,7 @@ app.use('/auth', UserAuth);
 app.use('/user', User);
 app.use('/order', BuyProduct);
 app.use('/delivery-boy', DeliveryBoys);
+app.use('/refunds', Refunds);
 
 app.get('/', (req, res) => {
   res.send({ status: 'up' })

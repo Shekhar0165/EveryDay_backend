@@ -33,6 +33,7 @@ const HandleGetAllCetagroy = async (req, res) => {
 };
 
 
+
 // Add new category
 const HandleAddCetagroy = async (req, res) => {
     const { name, labelId } = req.body;

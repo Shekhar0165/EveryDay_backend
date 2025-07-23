@@ -13,7 +13,11 @@ import {
     HandleUpdateUnitFromCart,
     HandleRemoveToCart,
     HandleGetAddtoCartProduct,
-    getSimilarProducts
+    getSimilarProducts,
+    searchProducts,
+    getTrendingProducts,
+    getProductSuggestions,
+    getProductById
 } from "../../Controllers/application/Product.js";
 import { AdminAuth } from "../../middleware/AdminAuth.js";
 import auth from "../../middleware/auth.js";
@@ -29,6 +33,12 @@ router.put("/update/:productId", AdminAuth, HandleUpdatePrduct);
 router.delete("/delete/:productId", AdminAuth, HandleDeletePrduct);
 router.get('/similar/:productId', getSimilarProducts);
 
+
+// Search products
+router.get("/user/search", searchProducts);
+router.get("/user/trending", getTrendingProducts);
+router.get("/user/suggestions", getProductSuggestions);
+router.get("/product/:id", getProductById);
 
 
 // Add to cart 

@@ -1,5 +1,6 @@
 import Category from "../../models/Categroy.js";
 import Product from "../../models/Product.js";
+import Label from "../../models/Label.js";
 import cloudinary from '../../config/Cloudinary.js';
 import mongoose from "mongoose";
 import User from "../../models/User.js";
@@ -8,7 +9,6 @@ import User from "../../models/User.js";
 const HandleGetPrductByCetagroy = async (req, res) => {
     const { categoryId } = req.params;
     const { page = 1, limit = 10, search = "" } = req.query;
-    console.log(categoryId)
     if (!mongoose.Types.ObjectId.isValid(categoryId)) {
         return res.status(400).json({ success: false, message: "Invalid category ID" });
     }
@@ -761,6 +761,267 @@ const getSimilarProducts = async (req, res) => {
 
 
 
+const searchProducts = async (req, res) => {
+    console.log("Search products request:", req.query);
+  try {
+    const {
+      search = '',
+      category = '',
+      label = '',
+      type = '',
+      minPrice = 0,
+      maxPrice = Infinity,
+      sortBy = 'createdAt',
+      sortOrder = 'desc',
+      page = 1,
+      limit = 20,
+      inStock = false
+    } = req.query;
+    console.log(req.query)
+
+    // Build search query
+    const searchQuery = {};
+    
+    // Text search across product name
+    if (search) {
+      searchQuery.ProductName = {
+        $regex: search,
+        $options: 'i' // case insensitive
+      };
+    }
+
+    // Category filter
+    if (category) {
+      searchQuery.CategoryId = category;
+    }
+
+    // Label filter
+    // if (label) {
+    //   searchQuery.LabelId = label;
+    // }
+
+    // Type filter
+    if (type) {
+      searchQuery.Type = type;
+    }
+
+    // Price range filter
+    if (minPrice > 0 || maxPrice < Infinity) {
+      searchQuery.PricePerUnit = {
+        $gte: Number(minPrice),
+        $lte: Number(maxPrice)
+      };
+    }
+
+    // Stock filter
+    if (inStock === 'true') {
+      searchQuery.Stock = { $gt: 0 };
+    }
+
+    // Sorting options
+    const sortOptions = {};
+    sortOptions[sortBy] = sortOrder === 'asc' ? 1 : -1;
+
+    // Calculate pagination
+    const skip = (Number(page) - 1) * Number(limit);
+
+    // Execute query with population
+    const products = await Product.find(searchQuery)
+      .populate('CategoryId', 'name description')
+      .populate({ path: 'LabelId', model: 'Label', select: 'name color' })
+      .sort(sortOptions)
+      .skip(skip)
+      .limit(Number(limit))
+      .lean();
+
+    // Get total count for pagination
+    const totalCount = await Product.countDocuments(searchQuery);
+    const totalPages = Math.ceil(totalCount / Number(limit));
+
+    // Transform data for frontend
+    const transformedProducts = products.map(product => ({
+      id: product._id,
+      name: product.ProductName,
+      image: product.Images,
+      imagePublicId: product.imagePublicId,
+      category: product.CategoryId?.name || 'Unknown',
+      categoryId: product.CategoryId?._id,
+      label: product.LabelId?.name || '',
+      labelColor: product.LabelId?.color || '#FB8C00',
+      type: product.Type,
+      price: product.PricePerUnit,
+      units: product.Units,
+      stock: product.Stock,
+      rating: product.Rating,
+      minimumOrder: product.MinimumOrder,
+      inStock: product.Stock > 0,
+      createdAt: product.createdAt
+    }));
+
+    res.status(200).json({
+      success: true,
+      data: {
+        products: transformedProducts,
+        pagination: {
+          currentPage: Number(page),
+          totalPages,
+          totalCount,
+          hasNext: Number(page) < totalPages,
+          hasPrev: Number(page) > 1
+        },
+        filters: {
+          search,
+          category,
+          label,
+          type,
+          minPrice: Number(minPrice),
+          maxPrice: maxPrice === Infinity ? null : Number(maxPrice),
+          sortBy,
+          sortOrder
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Search products error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to search products',
+      error: error.message
+    });
+  }
+};
+
+// Get trending/popular products
+const getTrendingProducts = async (req, res) => {
+  try {
+    const { limit = 10 } = req.query;
+
+    const trendingProducts = await Product.find({ Stock: { $gt: 0 } })
+      .populate('CategoryId', 'name')
+      .sort({ Rating: -1, createdAt: -1 })
+      .limit(Number(limit))
+      .lean();
+
+    res.status(200).json({
+      success: true,
+      data: trendingProducts
+    });
+
+  } catch (error) {
+    console.error('Get trending products error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get trending products',
+      error: error.message
+    });
+  }
+};
+
+// Get product suggestions for autocomplete
+const getProductSuggestions = async (req, res) => {
+    console.log("Get product suggestions request:");
+  try {
+    const { q = '', limit = 8 } = req.query;
+    console.log("Product suggestions query:", req.query);
+
+    if (!q || q.length < 2) {
+      return res.status(200).json({
+        success: true,
+        data: []
+      });
+    }
+
+    const suggestions = await Product.find({
+      ProductName: { $regex: q, $options: 'i' },
+      Stock: { $gt: 0 }
+    })
+    .select('ProductName CategoryId Images PricePerUnit')
+    .populate('CategoryId', 'name')
+    .limit(Number(limit))
+    .lean();
+
+    const transformedSuggestions = suggestions.map(product => ({
+      id: product._id,
+      name: product.ProductName,
+      category: product.CategoryId?.name || 'Unknown',
+      image: product.Images,
+      price: product.PricePerUnit
+    }));
+
+    res.status(200).json({
+      success: true,
+      data: transformedSuggestions
+    });
+
+  } catch (error) {
+    console.error('Get suggestions error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get suggestions',
+      error: error.message
+    });
+  }
+};
+
+// Get single product by ID
+const getProductById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const product = await Product.findById(id)
+      .populate('CategoryId', 'name description')
+      .populate({ path: 'LabelId', model: 'Label', select: 'name color description' })
+      .lean();
+
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: 'Product not found'
+      });
+    }
+
+    const transformedProduct = {
+      id: product._id,
+      name: product.ProductName,
+      image: product.Images,
+      imagePublicId: product.imagePublicId,
+      category: {
+        id: product.CategoryId?._id,
+        name: product.CategoryId?.name || 'Unknown',
+        description: product.CategoryId?.description
+      },
+      label: {
+        id: product.LabelId?._id,
+        name: product.LabelId?.name || '',
+        color: product.LabelId?.color || '#FB8C00',
+        description: product.LabelId?.description
+      },
+      type: product.Type,
+      price: product.PricePerUnit,
+      units: product.Units,
+      stock: product.Stock,
+      rating: product.Rating,
+      minimumOrder: product.MinimumOrder,
+      inStock: product.Stock > 0,
+      createdAt: product.createdAt
+    };
+
+    res.status(200).json({
+      success: true,
+      data: transformedProduct
+    });
+
+  } catch (error) {
+    console.error('Get product by ID error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get product',
+      error: error.message
+    });
+  }
+};
+
 export {
     HandleGetPrductByCetagroy,
     HandleAddPrduct,
@@ -773,5 +1034,9 @@ export {
     HandleUpdateUnitFromCart,
     HandleRemoveToCart,
     HandleGetAddtoCartProduct,
-    getSimilarProducts
+    getSimilarProducts,
+    searchProducts,
+    getTrendingProducts,
+    getProductSuggestions,
+    getProductById
 }

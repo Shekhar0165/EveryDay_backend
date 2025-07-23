@@ -1,13 +1,53 @@
 import User from '../../models/User.js'
 import Product from '../../models/Product.js'
 import Orders from '../../models/Order.js';
+import Razorpay from 'razorpay';
+import crypto from 'crypto';
 import mongoose from 'mongoose';
 import { HandleSendOrderToShop } from './Socket.js';
 
 
+
+
+// Initialize Razorpay
+const razorpay = new Razorpay({
+  key_id: process.env.RAZORPAY_KEY_ID,
+  key_secret: process.env.RAZORPAY_KEY_SECRET,
+});
+
+// Create Razorpay Order
+const HandleCreateRazorpayOrder = async (req, res) => {
+    const UserId = req.user._id;
+    const { amount, currency = 'INR' } = req.body;
+
+    try {
+        const options = {
+            amount: amount * 100, // Razorpay expects amount in paise
+            currency,
+            receipt: `receipt_order_${Date.now()}`,
+        };
+
+        const order = await razorpay.orders.create(options);
+        
+        res.json({
+            success: true,
+            order,
+            key: process.env.RAZORPAY_KEY_ID
+        });
+    } catch (error) {
+        console.error('Error creating Razorpay order:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message,
+        });
+    }
+};
+
+// Updated Place Order Function
 const HandlePlaceOrder = async (req, res) => {
     const UserId = req.user._id;
-    const { product } = req.body;
+    const { product, paymentMethod, razorpayPaymentData } = req.body;
+    console.log('Placing order for user:', UserId);
 
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -79,14 +119,43 @@ const HandlePlaceOrder = async (req, res) => {
                 units: orderUnits.toString()
             });
         }
-        const otp =Math.floor(100000 + Math.random() * 900000).toString();
 
-        let DeliveryCharge = 0; // Default delivery charge
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+        let DeliveryCharge = 0;
 
         if(totalAmount < 150) {
-            // Apply delivery charge
             totalAmount += 20;
             DeliveryCharge = 20;
+        }
+
+        // Handle payment verification for online payments
+        let paymentStatus = 'pending';
+        let paymentId = null;
+        
+        if (paymentMethod === 'razorpay' && razorpayPaymentData) {
+            // Verify Razorpay payment
+            const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = razorpayPaymentData;
+            
+            const sign = razorpay_order_id + '|' + razorpay_payment_id;
+            const expectedSign = crypto
+                .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+                .update(sign.toString())
+                .digest('hex');
+
+            if (razorpay_signature === expectedSign) {
+                paymentStatus = 'completed';
+                paymentId = razorpay_payment_id;
+            } else {
+                await session.abortTransaction();
+                session.endSession();
+                return res.status(400).json({
+                    success: false,
+                    message: 'Payment verification failed'
+                });
+            }
+        } else if (paymentMethod === 'cod') {
+            paymentStatus = 'cod';
         }
 
         // Create and save order
@@ -95,8 +164,12 @@ const HandlePlaceOrder = async (req, res) => {
             OrderBy: UserId,
             Status: "prepare",
             totalAmount: totalAmount,
-            OrderOtp:otp,
-            DeliveryCharge: DeliveryCharge
+            OrderOtp: otp,
+            DeliveryCharge: DeliveryCharge,
+            PaymentMethod: paymentMethod,
+            PaymentStatus: paymentStatus,
+            PaymentId: paymentId,
+            RazorpayOrderId: razorpayPaymentData?.razorpay_order_id || null
         });
         await newOrder.save({ session });
 
@@ -111,7 +184,7 @@ const HandlePlaceOrder = async (req, res) => {
         await session.commitTransaction();
         session.endSession();
 
-        // ✅ UPDATED: Fetch the complete order with populated fields for socket
+        // Send order to shop via socket
         try {
             const completeOrder = await Orders.findById(newOrder._id)
                 .populate('Product.ProductId', 'name price Images')
@@ -119,12 +192,10 @@ const HandlePlaceOrder = async (req, res) => {
                 .populate('OrderBy', 'name email mobile address');
 
             if (completeOrder) {
-                // Send the complete populated order to admin via socket
                 HandleSendOrderToShop(completeOrder, user);
             }
         } catch (socketError) {
             console.error("Error sending order to admin via socket:", socketError);
-            // Don't fail the API response if socket fails
         }
 
         return res.status(201).json({
@@ -144,8 +215,7 @@ const HandlePlaceOrder = async (req, res) => {
     }
 };
 
-
-
-
-
-export { HandlePlaceOrder }
+export {
+    HandlePlaceOrder,
+    HandleCreateRazorpayOrder
+};

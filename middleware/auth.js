@@ -9,7 +9,6 @@ const auth = async (req, res, next) => {
 
 
 
-
     if (!token) {
       return res.status(401).json({ 
         message: 'Access token required' 
@@ -28,11 +27,13 @@ const auth = async (req, res, next) => {
     req.user = user
     next();
   } catch (error) {
-    console.error('Auth middleware error:', error);
     return res.status(403).json({ 
       message: 'Invalid or expired token' 
     });
   }
 };
+
+
+
 
 export default auth;

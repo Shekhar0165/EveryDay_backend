@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 const JWT_CONFIG = {
     ACCESS_TOKEN_SECRET: process.env.ACCESS_TOKEN_SECRET,
     REFRESH_TOKEN_SECRET: process.env.REFRESH_TOKEN_SECRET,
-    ACCESS_TOKEN_EXPIRY: '1d',
+    ACCESS_TOKEN_EXPIRY: '120m',
     REFRESH_TOKEN_EXPIRY: '7d'
 };
 
@@ -98,7 +98,7 @@ const HandleConfirmOtp = async (req, res) => {
         res.cookie('accessToken', tokens.accessToken, {
             sameSite: 'Lax',
             path: '/',
-            maxAge: 1 * 24 * 60 * 60 * 1000,
+            maxAge: 60 * 1000 * 60,
         });
 
         // Refresh Token Cookie
@@ -121,4 +121,40 @@ const HandleConfirmOtp = async (req, res) => {
     }
 };
 
-export { HandleSendOtp, HandleConfirmOtp };
+
+const HandleRefreshToken = async (req, res) => {
+  const { refreshToken } = req.body;
+  console.log('Refresh token received:', refreshToken);
+
+  if (!refreshToken) {
+    return res.status(401).json({ 
+      message: 'Refresh token required' 
+    });
+  }
+
+  try {
+    const user = await User.findOne({refreshToken}).select('+refreshToken');
+
+    if (!user) {
+      return res.status(401).json({ 
+        message: 'Invalid refresh token' 
+      });
+    }
+
+    const tokens = generateTokens(user);
+    user.refreshToken = tokens.refreshToken;
+    await user.save();
+    
+    res.json({
+      success: true,
+      tokens: tokens,
+    });
+  } catch (error) {
+    console.error('Refresh token error:', error);
+    return res.status(403).json({ 
+      message: 'Invalid or expired refresh token' 
+    });
+  }
+};
+
+export { HandleSendOtp, HandleConfirmOtp,HandleRefreshToken };

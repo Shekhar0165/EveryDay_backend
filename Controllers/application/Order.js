@@ -4,6 +4,7 @@ import Orders from "../../models/Order.js"
 import Product from "../../models/Product.js"
 import { HandleNotifyDeliveryBoy, HandleNotifyToShop } from "./Socket.js"
 import mongoose from "mongoose";
+import RefundDetails from "../../models/RefundDetails.js"
 
 
 const HandleAddToCard = async (req, res) => {
@@ -82,13 +83,7 @@ const HandleGetOrder = async (req, res) => {
                 });
             }
 
-            // Check if user is authorized to view this order
-            // if (order.OrderBy._id.toString() !== userId && req.user.role !== 'admin') {
-            //     return res.status(403).json({
-            //         success: false,
-            //         message: 'Unauthorized to view this order'
-            //     });
-            // }
+
 
             return res.status(200).json({
                 success: true,
@@ -247,9 +242,11 @@ const HandleGetOrderForUser = async (req, res) => {
         const limit = parseInt(req.query.limit) || 10;
         const search = req.query.search?.trim() || "";
         const status = req.query.status?.trim();
+        console.log(UserId, page, limit, search, status);
 
         const statusMap = {
             current: ['current', 'prepare'],
+            past: ['completed'],
             past: ['completed'],
             cancel: ['cancel']
         };
@@ -329,9 +326,15 @@ const HandleCancelOrder = async (req, res) => {
     const { orderId } = req.params;
     const userId = req.user._id;
     console.log('Cancel Order Request:', orderId, userId);
+    
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    
     try {
-        const order = await Orders.findById(orderId);
+        const order = await Orders.findById(orderId).session(session);
         if (!order) {
+            await session.abortTransaction();
+            session.endSession();
             return res.status(404).json({
                 success: false,
                 message: "Order not found"
@@ -339,45 +342,113 @@ const HandleCancelOrder = async (req, res) => {
         }
 
         if (order.OrderBy.toString() !== userId.toString()) {
-            return res.status(403).json({
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(401).json({
                 success: false,
                 message: "You are not authorized to cancel this order"
             });
         }
+        
         if (order.Status === "cancel") {
+            await session.abortTransaction();
+            session.endSession();
             return res.status(400).json({
                 success: false,
                 message: "Order is already cancelled"
             });
         }
 
-        order.Status = "cancel";
-        await order.save();
+        // Restore stock for cancelled products
+        for (const item of order.Product) {
+            const product = await Product.findById(item.ProductId).session(session);
+            if (product) {
+                product.Stock += parseInt(item.units);
+                await product.save({ session });
+            }
+        }
 
+        // Handle refund based on payment method
+        let refundStatus = 'not_applicable';
+        let refundDetailsId = null;
+        
+        if (order.PaymentMethod === 'razorpay' && order.PaymentStatus === 'completed') {
+            refundStatus = 'pending_manual_refund';
+            
+            // Create separate RefundDetails record
+            const newRefundDetails = new RefundDetails({
+                orderId: order._id,
+                userId: userId,
+                amount: order.totalAmount,
+                paymentId: order.PaymentId,
+                razorpayOrderId: order.RazorpayOrderId,
+                requestedAt: new Date(),
+                status: 'pending',
+                refundMethod: 'manual'
+            });
+            
+            const savedRefundDetails = await newRefundDetails.save({ session });
+            refundDetailsId = savedRefundDetails._id;
+        }
+
+        // Update order status
+        order.Status = "cancel";
+        order.RefundStatus = refundStatus;
+        order.RefundDetailsId = refundDetailsId;
+        order.CancelledAt = new Date();
+        order.CancelReason = 'Cancelled by user';
+        
+        await order.save({ session });
+
+        // Handle delivery boy updates
         if(order.DeliveryBy) {
-            const deliveryBoy = await DeliveryBoy.findById(order.DeliveryBy);
+            const deliveryBoy = await DeliveryBoy.findById(order.DeliveryBy).session(session);
             if (deliveryBoy) {
                 deliveryBoy.DeliveryNotCompletedOrlate.push(order._id);
                 deliveryBoy.OnDelivery = null; // Reset OnDelivery status
-                await deliveryBoy.save();
+                await deliveryBoy.save({ session });
             }
             HandleNotifyDeliveryBoy(order.DeliveryBy, order._id, "Order cancelled by user");
         }
 
+        // Commit transaction
+        await session.commitTransaction();
+        session.endSession();
+
+        // Send notifications
         HandleNotifyToShop(order.Shop, order._id, "Order cancelled by user");
+        
+        // Prepare response message based on refund status
+        let responseMessage = "Order cancelled successfully";
+        if (refundStatus === 'pending_manual_refund') {
+            responseMessage += `. Refund of ₹${order.totalAmount} will be processed manually within 3-5 business days.`;
+        }
+
         return res.status(200).json({
             success: true,
-            message: "Order cancelled successfully",
-            data: order
+            message: responseMessage,
+            data: {
+                order: order,
+                refundDetails: refundStatus === 'pending_manual_refund' ? {
+                    refundId: refundDetailsId,
+                    amount: order.totalAmount,
+                    status: refundStatus,
+                    estimatedProcessingTime: '3-5 business days'
+                } : null
+            }
         });
+
     } catch (error) {
+        await session.abortTransaction();
+        session.endSession();
+        console.error("Error cancelling order:", error);
         return res.status(500).json({
             success: false,
             message: "Internal Server Error",
             error: error.message,
         });
     }
-}
+};
 
 
 
