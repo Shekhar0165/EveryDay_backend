@@ -12,6 +12,14 @@ const AdminSchema = new mongoose.Schema({
     refreshToken: {
         type: String,
     },
+    Coordinates: {
+        latitude: {
+            type: Number
+        },
+        longitude: {
+            type: Number
+        },
+    },
     createdAt: {
         type: Date,
         default: Date.now,

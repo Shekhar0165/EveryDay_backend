@@ -1,3 +1,4 @@
+import Admin from "../../models/Admin.js";
 import User from "../../models/User.js";
 import axios from "axios";
 
@@ -140,6 +141,81 @@ const getDistanceFromLatLonInMeters = (lat1, lon1, lat2, lon2) => {
     return d * 1000; // Convert to meters
 };
 
+const HandleCheckWeAreThere = async (req, res) => {
+    const { latitude, longitude } = req.body;
+    console.log('Check location:', { latitude, longitude });
+
+    if (!latitude || !longitude) {
+        return res.status(400).json({ 
+            success: false, 
+            message: "Latitude and longitude required" 
+        });
+    }
+
+    try {
+        // Find admins within 3km radius of the given coordinates
+        const admins = await Admin.find({
+            "Coordinates.latitude": { $exists: true },
+            "Coordinates.longitude": { $exists: true }
+        });
+
+        // Filter admins by distance (3000 meters = 3km)
+        const nearbyAdmins = admins.filter(admin => {
+            if (!admin.Coordinates.latitude || !admin.Coordinates.longitude) {
+                return false;
+            }
+
+            console.log('Admin coordinates:', {
+                latitude: admin.Coordinates.latitude,
+                longitude: admin.Coordinates.longitude
+            });
+
+            const distance = calculateDistance(
+                latitude, 
+                longitude, 
+                admin.Coordinates.latitude, 
+                admin.Coordinates.longitude
+            );
+
+            return distance <= 3000; // 3km in meters
+        });
+
+        return res.status(200).json({
+            success: true,
+            admins: nearbyAdmins,
+            count: nearbyAdmins.length,
+            message: nearbyAdmins.length > 0 
+                ? "Shop found nearby" 
+                : "No shops found in the area"
+        });
+
+    } catch (error) {
+        console.error("Location check error:", error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to check shop locations",
+            error: error.message
+        });
+    }
+};
+
+// Helper function to calculate distance between two coordinates using Haversine formula
+function calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371e3; // Earth's radius in meters
+    const φ1 = lat1 * Math.PI / 180;
+    const φ2 = lat2 * Math.PI / 180;
+    const Δφ = (lat2 - lat1) * Math.PI / 180;
+    const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+    const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+              Math.cos(φ1) * Math.cos(φ2) *
+              Math.sin(Δλ/2) * Math.sin(Δλ/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+    return R * c; // Distance in meters
+}
+
+
 const deg2rad = (deg) => {
     return deg * (Math.PI / 180);
 };
@@ -190,5 +266,6 @@ const HandleGetUserLocation = async (req, res) => {
 
 export { HandlePreviewUserLocation,
     HandleSaveUserLocation,
-    HandleGetUserLocation
+    HandleGetUserLocation,
+    HandleCheckWeAreThere
  };

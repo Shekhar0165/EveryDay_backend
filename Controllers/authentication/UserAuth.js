@@ -1,5 +1,6 @@
 import User from '../../models/User.js';
 import jwt from 'jsonwebtoken';
+import twilio from 'twilio';
 
 const JWT_CONFIG = {
     ACCESS_TOKEN_SECRET: process.env.ACCESS_TOKEN_SECRET,
@@ -7,6 +8,11 @@ const JWT_CONFIG = {
     ACCESS_TOKEN_EXPIRY: '120m',
     REFRESH_TOKEN_EXPIRY: '7d'
 };
+
+const client = twilio(
+    process.env.TWILIO_ACCOUNT_SID,
+    process.env.TWILIO_AUTH_TOKEN
+);
 
 const generateTokens = (user) => {
     const accessToken = jwt.sign(
@@ -27,14 +33,36 @@ const generateTokens = (user) => {
 const SendOtpToNumber = async (otp, number) => {
     try {
         console.log({ otp, number });
+
+        if (!number.startsWith('+91')) {
+            throw new Error('Only Indian numbers (+91) are supported');
+        }
+        
+        const message = await client.messages.create({
+            body:`Your Valon verification code is: ${otp}. This code will expire in 5 minutes. Do not share this code with anyone.`,
+            from: process.env.TWILIO_PHONE_NUMBER,
+            to: number
+        });
+
+        console.log('OTP sent successfully:', message.sid);
+        return {
+            success: true,
+            messageSid: message.sid,
+            message: 'OTP sent successfully'
+        };
+
     } catch (error) {
         console.error('Failed to send OTP:', error);
+        return {
+            success: false,
+            error: error.message
+        };
     }
 };
 
 const HandleSendOtp = async (req, res) => {
     const { mobile } = req.body;
-    console.log(mobile)
+    
     if (!mobile) {
         return res.status(400).send({ success: false, message: 'Mobile number required' });
     }
@@ -58,11 +86,25 @@ const HandleSendOtp = async (req, res) => {
         }
 
         await user.save();
-        await SendOtpToNumber(otp, mobile);
+        
+        // Add +91 prefix for Twilio
+        const formattedNumber = `+91${mobile}`;
+        console.log('Sending OTP to formatted number:', formattedNumber);
+        
+        const smsResult = await SendOtpToNumber(otp, formattedNumber);
+        
+        if (!smsResult.success) {
+            return res.status(500).send({ 
+                success: false, 
+                message: 'Failed to send OTP', 
+                error: smsResult.error 
+            });
+        }
 
         res.status(200).send({ success: true, message: `OTP sent to ${mobile}` });
     } catch (error) {
-        res.status(500).send({ success: false, message: 'Internal Server Error', error });
+        console.error('HandleSendOtp error:', error);
+        res.status(500).send({ success: false, message: 'Internal Server Error', error: error.message });
     }
 };
 

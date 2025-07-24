@@ -129,6 +129,36 @@ const GenerateSuperAdmin = async (req, res) => {
     }
 }
 
+const HandleAddCoordinates = async (req, res) => {
+    const { latitude, longitude } = req.body;
+    const adminId = '686a6e62d929988bced13abd';
+    try {
+        const admin = await Admin.findById(adminId);
+        if (!admin) {
+            return res.status(404).json({
+                success: false,
+                message: 'Admin not found'
+            });
+        }
+
+        admin.Coordinates = { latitude, longitude };
+        await admin.save();
+
+        return res.status(200).json({
+            success: true,
+            message: 'Coordinates added successfully',
+            coordinates: admin.Coordinates
+        });
+    } catch (error) {
+        console.error('Error adding coordinates:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Internal server error',
+            error: error.message
+        });
+    }
+}
 
 
-export { AdminAuth, GenerateSuperAdmin };
+
+export { AdminAuth, GenerateSuperAdmin, HandleAddCoordinates };
