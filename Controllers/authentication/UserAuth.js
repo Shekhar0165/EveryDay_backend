@@ -1,3 +1,4 @@
+import axios from 'axios';
 import User from '../../models/User.js';
 import jwt from 'jsonwebtoken';
 import twilio from 'twilio';
@@ -34,32 +35,56 @@ const SendOtpToNumber = async (otp, number) => {
     try {
         console.log({ otp, number });
 
-        if (!number.startsWith('+91')) {
-            throw new Error('Only Indian numbers (+91) are supported');
+        // Remove +91 prefix if present and validate Indian number
+        let cleanNumber = number;
+        if (number.startsWith('+91')) {
+            cleanNumber = number.substring(3);
+        } else if (!number.startsWith('91') && number.length === 10) {
+            // If it's a 10-digit number, it's likely without country code
+            cleanNumber = number;
+        } else {
+            throw new Error('Only Indian numbers are supported');
         }
-        
-        const message = await client.messages.create({
-            body:`Your Valon verification code is: ${otp}. This code will expire in 5 minutes. Do not share this code with anyone.`,
-            from: process.env.TWILIO_PHONE_NUMBER,
-            to: number
+
+        // Validate Indian mobile number (should be 10 digits)
+        if (!/^[6-9]\d{9}$/.test(cleanNumber)) {
+            throw new Error('Invalid Indian mobile number format');
+        }
+
+        const response = await axios.post('https://www.fast2sms.com/dev/bulkV2', {
+            variables_values: otp,
+            route: 'otp',
+            numbers: cleanNumber,
+            // You can also use a custom message instead of template
+            message: `Your Valon verification code is: ${otp}. This code will expire in 5 minutes. Do not share this code with anyone.`
+        }, {
+            headers: {
+                'authorization': process.env.FAST2SMS_API_KEY,
+                'Content-Type': 'application/json'
+            }
         });
 
-        console.log('OTP sent successfully:', message.sid);
-        return {
-            success: true,
-            messageSid: message.sid,
-            message: 'OTP sent successfully'
-        };
+        console.log('Fast2SMS Response:', response.data);
+
+        if (response.data.return === true) {
+            console.log('OTP sent successfully:', response.data.request_id);
+            return {
+                success: true,
+                requestId: response.data.request_id,
+                message: 'OTP sent successfully'
+            };
+        } else {
+            throw new Error(response.data.message || 'Failed to send OTP');
+        }
 
     } catch (error) {
         console.error('Failed to send OTP:', error);
         return {
             success: false,
-            error: error.message
+            error: error.response?.data?.message || error.message
         };
     }
 };
-
 const HandleSendOtp = async (req, res) => {
     const { mobile } = req.body;
     
