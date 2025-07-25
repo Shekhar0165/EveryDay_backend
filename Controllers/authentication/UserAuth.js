@@ -65,9 +65,7 @@ const SendOtpToNumber = async (otp, number) => {
 
         const message = `Your Valon verification code is: ${otp}. This code will expire in 5 minutes. Do not share this code with anyone.`;
 
-         const sentMessage = await client.sendMessage(chatId, message);
-
-        console.log('OTP sent successfully via WhatsApp:', sentMessage.id.id);
+        const sentMessage = await client.sendMessage(chatId, message);
 
         return {
             success: true,
@@ -85,7 +83,7 @@ const SendOtpToNumber = async (otp, number) => {
 
 const HandleSendOtp = async (req, res) => {
     const { mobile } = req.body;
-    
+
     if (!mobile) {
         return res.status(400).send({ success: false, message: 'Mobile number required' });
     }
@@ -109,18 +107,18 @@ const HandleSendOtp = async (req, res) => {
         }
 
         await user.save();
-        
+
         // Add +91 prefix for Twilio
         const formattedNumber = `+91${mobile}`;
         console.log('Sending OTP to formatted number:', formattedNumber);
-        
+
         const smsResult = await SendOtpToNumber(otp, formattedNumber);
-        
+
         if (!smsResult.success) {
-            return res.status(500).send({ 
-                success: false, 
-                message: 'Failed to send OTP', 
-                error: smsResult.error 
+            return res.status(500).send({
+                success: false,
+                message: 'Failed to send OTP',
+                error: smsResult.error
             });
         }
 
@@ -188,38 +186,38 @@ const HandleConfirmOtp = async (req, res) => {
 
 
 const HandleRefreshToken = async (req, res) => {
-  const { refreshToken } = req.body;
-  console.log('Refresh token received:', refreshToken);
+    const { refreshToken } = req.body;
+    console.log('Refresh token received:', refreshToken);
 
-  if (!refreshToken) {
-    return res.status(401).json({ 
-      message: 'Refresh token required' 
-    });
-  }
-
-  try {
-    const user = await User.findOne({refreshToken}).select('+refreshToken');
-
-    if (!user) {
-      return res.status(401).json({ 
-        message: 'Invalid refresh token' 
-      });
+    if (!refreshToken) {
+        return res.status(401).json({
+            message: 'Refresh token required'
+        });
     }
 
-    const tokens = generateTokens(user);
-    user.refreshToken = tokens.refreshToken;
-    await user.save();
-    
-    res.json({
-      success: true,
-      tokens: tokens,
-    });
-  } catch (error) {
-    console.error('Refresh token error:', error);
-    return res.status(403).json({ 
-      message: 'Invalid or expired refresh token' 
-    });
-  }
+    try {
+        const user = await User.findOne({ refreshToken }).select('+refreshToken');
+
+        if (!user) {
+            return res.status(401).json({
+                message: 'Invalid refresh token'
+            });
+        }
+
+        const tokens = generateTokens(user);
+        user.refreshToken = tokens.refreshToken;
+        await user.save();
+
+        res.json({
+            success: true,
+            tokens: tokens,
+        });
+    } catch (error) {
+        console.error('Refresh token error:', error);
+        return res.status(403).json({
+            message: 'Invalid or expired refresh token'
+        });
+    }
 };
 
-export { HandleSendOtp, HandleConfirmOtp,HandleRefreshToken };
+export { HandleSendOtp, HandleConfirmOtp, HandleRefreshToken };
