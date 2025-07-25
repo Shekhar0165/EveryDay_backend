@@ -1,8 +1,11 @@
-import axios from 'axios';
 import User from '../../models/User.js';
 import jwt from 'jsonwebtoken';
 import twilio from 'twilio';
+import pkg from 'whatsapp-web.js';
+import qrcode from 'qrcode-terminal';
+import puppeteer from 'puppeteer';
 
+const { Client, LocalAuth } = pkg;
 const JWT_CONFIG = {
     ACCESS_TOKEN_SECRET: process.env.ACCESS_TOKEN_SECRET,
     REFRESH_TOKEN_SECRET: process.env.REFRESH_TOKEN_SECRET,
@@ -10,10 +13,29 @@ const JWT_CONFIG = {
     REFRESH_TOKEN_EXPIRY: '7d'
 };
 
-const client = twilio(
-    process.env.TWILIO_ACCOUNT_SID,
-    process.env.TWILIO_AUTH_TOKEN
-);
+
+
+const client = new Client({
+    authStrategy: new LocalAuth({
+        dataPath: './.wwebjs_auth',
+    }),
+    puppeteer: {
+        headless: true, // set to false for debugging
+        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        executablePath: puppeteer.executablePath(),
+    },
+});
+
+client.on('qr', (qr) => {
+    console.log('📱 Scan this QR code to login:');
+    qrcode.generate(qr, { small: true });
+});
+
+client.on('ready', () => {
+    console.log('✅ WhatsApp is connected and ready to send messages!');
+});
+
+client.initialize();
 
 const generateTokens = (user) => {
     const accessToken = jwt.sign(
@@ -35,56 +57,32 @@ const SendOtpToNumber = async (otp, number) => {
     try {
         console.log({ otp, number });
 
-        // Remove +91 prefix if present and validate Indian number
-        let cleanNumber = number;
-        if (number.startsWith('+91')) {
-            cleanNumber = number.substring(3);
-        } else if (!number.startsWith('91') && number.length === 10) {
-            // If it's a 10-digit number, it's likely without country code
-            cleanNumber = number;
-        } else {
-            throw new Error('Only Indian numbers are supported');
+        if (!number.startsWith('+91')) {
+            throw new Error('Only Indian numbers (+91) are supported');
         }
 
-        // Validate Indian mobile number (should be 10 digits)
-        if (!/^[6-9]\d{9}$/.test(cleanNumber)) {
-            throw new Error('Invalid Indian mobile number format');
-        }
+        const chatId = number.replace('+', '') + '@c.us';
 
-        const response = await axios.post('https://www.fast2sms.com/dev/bulkV2', {
-            variables_values: otp,
-            route: 'otp',
-            numbers: cleanNumber,
-            // You can also use a custom message instead of template
-            message: `Your Valon verification code is: ${otp}. This code will expire in 5 minutes. Do not share this code with anyone.`
-        }, {
-            headers: {
-                'authorization': process.env.FAST2SMS_API_KEY,
-                'Content-Type': 'application/json'
-            }
-        });
+        const message = `Your Valon verification code is: ${otp}. This code will expire in 5 minutes. Do not share this code with anyone.`;
 
-        console.log('Fast2SMS Response:', response.data);
+         const sentMessage = await client.sendMessage(chatId, message);
 
-        if (response.data.return === true) {
-            console.log('OTP sent successfully:', response.data.request_id);
-            return {
-                success: true,
-                requestId: response.data.request_id,
-                message: 'OTP sent successfully'
-            };
-        } else {
-            throw new Error(response.data.message || 'Failed to send OTP');
-        }
+        console.log('OTP sent successfully via WhatsApp:', sentMessage.id.id);
 
+        return {
+            success: true,
+            message: 'OTP sent successfully via WhatsApp',
+            messageId: sentMessage.id.id
+        };
     } catch (error) {
-        console.error('Failed to send OTP:', error);
+        console.error('Failed to send OTP via WhatsApp:', error);
         return {
             success: false,
-            error: error.response?.data?.message || error.message
+            error: error.message
         };
     }
 };
+
 const HandleSendOtp = async (req, res) => {
     const { mobile } = req.body;
     

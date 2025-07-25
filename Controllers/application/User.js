@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import Admin from "../../models/Admin.js";
 import User from "../../models/User.js";
 import axios from "axios";
@@ -221,7 +222,7 @@ const deg2rad = (deg) => {
 };
 
 
-const HandleGetUserLocation = async (req, res) => {
+const HandleGetUserProfile = async (req, res) => {
     const userId = req.user._id;
 
     try {
@@ -250,7 +251,12 @@ const HandleGetUserLocation = async (req, res) => {
                 address: formatted,
                 coordinates: location.coordinates // [longitude, latitude]
             },
-            mobile:user.mobile
+            mobile:user.mobile,
+            email:user.email,
+            profileImage:user.ProfileImage,
+            joinDate:user.createdAt,
+            totalOrders:user.Orders.length,
+            name:user.name
         });
 
     } catch (error) {
@@ -263,9 +269,178 @@ const HandleGetUserLocation = async (req, res) => {
     }
 };
 
+const updateUserProfile = async (req, res) => {
+    try {
+        const userId = req.user._id; // Assuming user ID comes from auth middleware
+        const { name, email, mobile, ProfileImage } = req.body;
+        console.log(req.body)
+
+        // Validate user ID
+        if (!mongoose.isValidObjectId(userId)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid user ID'
+            });
+        }
+
+        // Find the user
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found'
+            });
+        }
+        console.log(user)
+
+        // Prepare update object with only allowed fields
+        const updateData = {};
+
+        // Validate and update name
+        if (name !== undefined) {
+            if (typeof name !== 'string' || name.trim().length === 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Name must be a non-empty string'
+                });
+            }
+            updateData.name = name.trim();
+        }
+
+        // Validate and update email
+        if (email !== undefined) {
+            if (typeof email !== 'string') {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Email must be a string'
+                });
+            }
+            
+            // Basic email validation
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (email.trim() !== '' && !emailRegex.test(email.trim())) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Please provide a valid email address'
+                });
+            }
+            
+            updateData.email = email.trim() || 'no Email';
+        }
+
+        // Validate and update mobile (check for uniqueness)
+        if (mobile !== undefined) {
+            if (typeof mobile !== 'string' || mobile.trim().length === 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Mobile number must be a non-empty string'
+                });
+            }
+
+            // Basic mobile validation (adjust regex as per your requirements)
+            const mobileRegex = /^[0-9]{10,15}$/;
+            if (!mobileRegex.test(mobile.trim())) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Please provide a valid mobile number (10-15 digits)'
+                });
+            }
+
+            // Check if mobile number already exists for another user
+            const existingUser = await User.findOne({ 
+                mobile: mobile.trim(), 
+                _id: { $ne: userId } 
+            });
+            
+            if (existingUser) {
+                return res.status(409).json({
+                    success: false,
+                    message: 'Mobile number already exists'
+                });
+            }
+
+            updateData.mobile = mobile.trim();
+        }
+
+        // Validate and update profile image
+        if (ProfileImage !== undefined) {
+            if (typeof ProfileImage !== 'string') {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Profile image must be a string (URL)'
+                });
+            }
+            updateData.ProfileImage = ProfileImage.trim();
+        }
+
+        // Check if there's anything to update
+        if (Object.keys(updateData).length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'No valid fields provided for update'
+            });
+        }
+
+        // Update the user
+        const updatedUser = await User.findByIdAndUpdate(
+            userId,
+            updateData,
+            { 
+                new: true, 
+                runValidators: true,
+                select: '-otp -otpExpiresAt -refreshToken' // Exclude sensitive fields
+            }
+        );
+
+        return res.status(200).json({
+            success: true,
+            message: 'Profile updated successfully',
+            data: {
+                user: {
+                    _id: updatedUser._id,
+                    name: updatedUser.name,
+                    email: updatedUser.email,
+                    mobile: updatedUser.mobile,
+                    ProfileImage: updatedUser.ProfileImage,
+                    address: updatedUser.address,
+                    isVerified: updatedUser.isVerified,
+                    createdAt: updatedUser.createdAt
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error('Error updating user profile:', error);
+        
+        // Handle mongoose validation errors
+        if (error.name === 'ValidationError') {
+            const messages = Object.values(error.errors).map(err => err.message);
+            return res.status(400).json({
+                success: false,
+                message: 'Validation error',
+                errors: messages
+            });
+        }
+
+        // Handle duplicate key error
+        if (error.code === 11000) {
+            return res.status(409).json({
+                success: false,
+                message: 'Mobile number already exists'
+            });
+        }
+
+        return res.status(500).json({
+            success: false,
+            message: 'Internal server error'
+        });
+    }
+};
+
 
 export { HandlePreviewUserLocation,
     HandleSaveUserLocation,
-    HandleGetUserLocation,
-    HandleCheckWeAreThere
+    HandleGetUserProfile,
+    HandleCheckWeAreThere,
+    updateUserProfile
  };

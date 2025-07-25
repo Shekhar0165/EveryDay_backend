@@ -10,6 +10,14 @@ const userSchema = new mongoose.Schema({
         required: true,
         unique: true,
     },
+    email:{
+        type:String,
+        default:"no Email"
+    },
+    ProfileImage:{
+        type:String,
+        default:'https://res-console.cloudinary.com/dt9kpgtli/thumbnails/v1/image/upload/v1750145996/dXNlcnMvcGx3djNoY3hzd2JkZWh2OXd0YmQ=/drilldown'
+    },
     address: {
         formatted: { type: String },
         location: {
