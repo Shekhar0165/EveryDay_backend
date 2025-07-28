@@ -5,14 +5,36 @@ import Razorpay from 'razorpay';
 import crypto from 'crypto';
 import mongoose from 'mongoose';
 import { HandleSendOrderToShop } from './Socket.js';
+const { Client, LocalAuth } = pkg;
 
 
+const client = new Client({
+    authStrategy: new LocalAuth({
+        dataPath: '../../.wwebjs_auth',
+    }),
+    puppeteer: {
+        headless: true, // set to false for debugging
+        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        executablePath: puppeteer.executablePath(),
+    },
+});
 
+client.on('qr', (qr) => {
+    console.log('📱 Scan this QR code to login:');
+    qrcode.generate(qr, { small: true });
+});
+
+client.on('ready', () => {
+    console.log('✅ WhatsApp is connected and ready to send messages!');
+});
+
+
+client.initialize();
 
 // Initialize Razorpay
 const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID,
-  key_secret: process.env.RAZORPAY_KEY_SECRET,
+    key_id: process.env.RAZORPAY_KEY_ID,
+    key_secret: process.env.RAZORPAY_KEY_SECRET,
 });
 
 // Create Razorpay Order
@@ -28,7 +50,7 @@ const HandleCreateRazorpayOrder = async (req, res) => {
         };
 
         const order = await razorpay.orders.create(options);
-        
+
         res.json({
             success: true,
             order,
@@ -124,7 +146,7 @@ const HandlePlaceOrder = async (req, res) => {
 
         let DeliveryCharge = 0;
 
-        if(totalAmount < 99) {
+        if (totalAmount < 99) {
             totalAmount += 20;
             DeliveryCharge = 20;
         }
@@ -132,11 +154,11 @@ const HandlePlaceOrder = async (req, res) => {
         // Handle payment verification for online payments
         let paymentStatus = 'pending';
         let paymentId = null;
-        
+
         if (paymentMethod === 'razorpay' && razorpayPaymentData) {
             // Verify Razorpay payment
             const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = razorpayPaymentData;
-            
+
             const sign = razorpay_order_id + '|' + razorpay_payment_id;
             const expectedSign = crypto
                 .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
@@ -197,6 +219,14 @@ const HandlePlaceOrder = async (req, res) => {
         } catch (socketError) {
             console.error("Error sending order to admin via socket:", socketError);
         }
+
+        const number = '+918218875959'
+
+        const chatId = number.replace('+', '') + '@c.us';
+
+        const message = `shekhar Get An Order From User Please Check Your Dashboard`;
+
+        const sentMessage = await client.sendMessage(chatId, message);
 
         return res.status(201).json({
             success: true,
