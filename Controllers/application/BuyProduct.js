@@ -124,7 +124,7 @@ const HandlePlaceOrder = async (req, res) => {
 
         let DeliveryCharge = 0;
 
-        if(totalAmount < 150) {
+        if(totalAmount < 99) {
             totalAmount += 20;
             DeliveryCharge = 20;
         }
