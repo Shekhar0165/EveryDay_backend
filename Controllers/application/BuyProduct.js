@@ -5,6 +5,11 @@ import Razorpay from 'razorpay';
 import crypto from 'crypto';
 import mongoose from 'mongoose';
 import { HandleSendOrderToShop } from './Socket.js';
+import pkg from 'whatsapp-web.js';
+import qrcode from 'qrcode-terminal';
+import puppeteer from 'puppeteer';
+
+
 const { Client, LocalAuth } = pkg;
 
 
