@@ -27,7 +27,7 @@ const HandleGetPrductByCetagroy = async (req, res) => {
         const products = await Product.find(filter)
             .sort({ createdAt: -1 })
             .skip(skip)
-            .limit(limitNumber);
+            // .limit(limitNumber);
 
         const total = await Product.countDocuments(filter);
 

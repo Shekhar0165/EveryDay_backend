@@ -131,7 +131,7 @@ const GenerateSuperAdmin = async (req, res) => {
 
 const HandleAddCoordinates = async (req, res) => {
     const { latitude, longitude } = req.body;
-    const adminId = '686a6e62d929988bced13abd';
+    const adminId = '6883c978617a4ec296cc163d';
     try {
         const admin = await Admin.findById(adminId);
         if (!admin) {
