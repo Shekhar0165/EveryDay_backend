@@ -2,9 +2,21 @@ import mongoose from "mongoose";
 import Admin from "../../models/Admin.js";
 import User from "../../models/User.js";
 import axios from "axios";
+import nodemailer from 'nodemailer';
+import crypto from 'crypto';
 
 // Load from .env
 const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
+
+
+// Setup your nodemailer transporter
+const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASSWORD,
+    },
+});
 
 
 const HandlePreviewUserLocation = async (req, res) => {
@@ -25,18 +37,18 @@ const HandlePreviewUserLocation = async (req, res) => {
         const formatted = geoRes.data?.results?.[0]?.formatted_address || "Unknown location";
         console.log('Formatted address:', formatted);
 
-        return res.status(200).json({ 
-            success: true, 
+        return res.status(200).json({
+            success: true,
             address: formatted,
             message: "Address fetched successfully"
         });
 
     } catch (error) {
         console.error("Location preview error:", error);
-        res.status(500).json({ 
-            success: false, 
+        res.status(500).json({
+            success: false,
             message: "Failed to fetch address",
-            error: error.message 
+            error: error.message
         });
     }
 };
@@ -80,9 +92,9 @@ const HandleSaveUserLocation = async (req, res) => {
             };
 
             await user.save();
-            return res.status(200).json({ 
-                success: true, 
-                message: "Location saved successfully", 
+            return res.status(200).json({
+                success: true,
+                message: "Location saved successfully",
                 address: formatted,
                 isFirstTime: true
             });
@@ -102,16 +114,16 @@ const HandleSaveUserLocation = async (req, res) => {
             user.address.location.coordinates = [longitude, latitude];
             await user.save();
 
-            return res.status(200).json({ 
-                success: true, 
-                message: `Location saved successfully`, 
+            return res.status(200).json({
+                success: true,
+                message: `Location saved successfully`,
                 address: formatted,
                 distance: Math.round(distance)
             });
         } else {
             // Return existing address without updating
-            return res.status(200).json({ 
-                success: true, 
+            return res.status(200).json({
+                success: true,
                 message: `Location saved successfully`,
                 address: user.address.formatted,
                 distance: Math.round(distance)
@@ -120,10 +132,10 @@ const HandleSaveUserLocation = async (req, res) => {
 
     } catch (error) {
         console.error("Location save error:", error);
-        res.status(500).json({ 
-            success: false, 
-            message: "Failed to save location", 
-            error: error.message 
+        res.status(500).json({
+            success: false,
+            message: "Failed to save location",
+            error: error.message
         });
     }
 };
@@ -147,9 +159,9 @@ const HandleCheckWeAreThere = async (req, res) => {
     console.log('Check location:', { latitude, longitude });
 
     if (!latitude || !longitude) {
-        return res.status(400).json({ 
-            success: false, 
-            message: "Latitude and longitude required" 
+        return res.status(400).json({
+            success: false,
+            message: "Latitude and longitude required"
         });
     }
 
@@ -172,9 +184,9 @@ const HandleCheckWeAreThere = async (req, res) => {
             });
 
             const distance = calculateDistance(
-                latitude, 
-                longitude, 
-                admin.Coordinates.latitude, 
+                latitude,
+                longitude,
+                admin.Coordinates.latitude,
                 admin.Coordinates.longitude
             );
 
@@ -185,8 +197,8 @@ const HandleCheckWeAreThere = async (req, res) => {
             success: true,
             admins: nearbyAdmins,
             count: nearbyAdmins.length,
-            message: nearbyAdmins.length > 0 
-                ? "Shop found nearby" 
+            message: nearbyAdmins.length > 0
+                ? "Shop found nearby"
                 : "No shops found in the area"
         });
 
@@ -208,10 +220,10 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
     const Δφ = (lat2 - lat1) * Math.PI / 180;
     const Δλ = (lon2 - lon1) * Math.PI / 180;
 
-    const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
-              Math.cos(φ1) * Math.cos(φ2) *
-              Math.sin(Δλ/2) * Math.sin(Δλ/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+        Math.cos(φ1) * Math.cos(φ2) *
+        Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
     return R * c; // Distance in meters
 }
@@ -251,12 +263,12 @@ const HandleGetUserProfile = async (req, res) => {
                 address: formatted,
                 coordinates: location.coordinates // [longitude, latitude]
             },
-            mobile:user.mobile,
-            email:user.email,
-            profileImage:user.ProfileImage,
-            joinDate:user.createdAt,
-            totalOrders:user.Orders.length,
-            name:user.name
+            mobile: user.mobile,
+            email: user.email,
+            profileImage: user.ProfileImage,
+            joinDate: user.createdAt,
+            totalOrders: user.Orders.length,
+            name: user.name
         });
 
     } catch (error) {
@@ -315,7 +327,7 @@ const updateUserProfile = async (req, res) => {
                     message: 'Email must be a string'
                 });
             }
-            
+
             // Basic email validation
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
             if (email.trim() !== '' && !emailRegex.test(email.trim())) {
@@ -324,7 +336,7 @@ const updateUserProfile = async (req, res) => {
                     message: 'Please provide a valid email address'
                 });
             }
-            
+
             updateData.email = email.trim() || 'no Email';
         }
 
@@ -347,11 +359,11 @@ const updateUserProfile = async (req, res) => {
             }
 
             // Check if mobile number already exists for another user
-            const existingUser = await User.findOne({ 
-                mobile: mobile.trim(), 
-                _id: { $ne: userId } 
+            const existingUser = await User.findOne({
+                mobile: mobile.trim(),
+                _id: { $ne: userId }
             });
-            
+
             if (existingUser) {
                 return res.status(409).json({
                     success: false,
@@ -385,8 +397,8 @@ const updateUserProfile = async (req, res) => {
         const updatedUser = await User.findByIdAndUpdate(
             userId,
             updateData,
-            { 
-                new: true, 
+            {
+                new: true,
                 runValidators: true,
                 select: '-otp -otpExpiresAt -refreshToken' // Exclude sensitive fields
             }
@@ -411,7 +423,7 @@ const updateUserProfile = async (req, res) => {
 
     } catch (error) {
         console.error('Error updating user profile:', error);
-        
+
         // Handle mongoose validation errors
         if (error.name === 'ValidationError') {
             const messages = Object.values(error.errors).map(err => err.message);
@@ -437,10 +449,106 @@ const updateUserProfile = async (req, res) => {
     }
 };
 
+const checkUser = async (req, res) => {
+    try {
+        const { mobile } = req.body;
+        if (!mobile) {
+            return res.status(400).json({ message: 'Mobile number is required' });
+        }
 
-export { HandlePreviewUserLocation,
+        const user = await User.findOne({ mobile });
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        // Check if user has email
+        if (user.email === 'no Email') {
+            return res.status(200).json({ hasEmail: false });
+        }
+
+        return res.status(200).json({ hasEmail: true });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+// 2. Send verification code to user email after verifying phone+email match
+const sendVerification = async (req, res) => {
+    try {
+        const { mobile, email } = req.body;
+        if (!mobile || !email) {
+            return res.status(400).json({ message: 'Mobile and email are required' });
+        }
+
+        const user = await User.findOne({ mobile, email });
+        if (!user) {
+            return res.status(400).json({ message: 'Mobile and email do not match any account' });
+        }
+
+        // Generate OTP and expiry (e.g., 10 minutes)
+        const otp = crypto.randomInt(100000, 999999).toString();
+        const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+        user.otp = otp;
+        user.otpExpiresAt = otpExpiresAt;
+        user.isVerified = false;
+        await user.save();
+
+        // Send email with OTP
+        await transporter.sendMail({
+            from: `"Valon Support" <${process.env.EMAIL_USER}>`,
+            to: user.email,
+            subject: 'Your Verification Code',
+            text: `Hi,\n\nYour verification code to delete your account is: ${otp}\nThis code expires in 10 minutes.\n\nIf you did not request this, please ignore.`,
+        });
+
+        res.status(200).json({ message: 'Verification code sent' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+// 3. Verify OTP and delete account
+const verifyAndDelete = async (req, res) => {
+    try {
+        const { mobile, email, verificationCode } = req.body;
+        if (!mobile || !email || !verificationCode) {
+            return res.status(400).json({ message: 'Mobile, email and verification code are required' });
+        }
+
+        const user = await User.findOne({ mobile, email }).select('+otp +otpExpiresAt');
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        // Check OTP validity and expiration
+        if (user.otp !== verificationCode) {
+            return res.status(400).json({ message: 'Invalid verification code' });
+        }
+        if (new Date() > user.otpExpiresAt) {
+            return res.status(400).json({ message: 'Verification code expired' });
+        }
+
+        // Delete user
+        await User.deleteOne({ _id: user._id });
+
+        res.status(200).json({ message: 'Account deleted successfully' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+
+export {
+    HandlePreviewUserLocation,
     HandleSaveUserLocation,
     HandleGetUserProfile,
     HandleCheckWeAreThere,
-    updateUserProfile
- };
+    updateUserProfile,
+    checkUser,
+    sendVerification,
+    verifyAndDelete
+};
