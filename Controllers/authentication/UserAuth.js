@@ -84,6 +84,10 @@ const SendOtpToNumber = async (otp, number) => {
 const HandleSendOtp = async (req, res) => {
     const { mobile } = req.body;
 
+    if(mobile === '2222222222'){
+        res.status(200).send({ success: true, message: `OTP sent to ${mobile}` });
+    }
+
     if (!mobile) {
         return res.status(400).send({ success: false, message: 'Mobile number required' });
     }
@@ -132,10 +136,51 @@ const HandleSendOtp = async (req, res) => {
 const HandleConfirmOtp = async (req, res) => {
     const { mobile, otp } = req.body;
 
+    if(mobile )
+
     if (!mobile || !otp) {
         return res.status(400).send({ success: false, message: 'Mobile and OTP required' });
     }
 
+    // ✅ Shortcut for test/demo account
+    if (mobile === '2222222222' && otp === '666666') {
+        let user = await User.findOne({ mobile });
+
+        if (!user) {
+            user = new User({
+                mobile,
+                isVerified: true,
+            });
+            await user.save();
+        }
+
+        const tokens = generateTokens(user);
+        user.refreshToken = tokens.refreshToken;
+
+        res.cookie('accessToken', tokens.accessToken, {
+            sameSite: 'Lax',
+            path: '/',
+            maxAge: 60 * 1000 * 60,
+        });
+
+        res.cookie('refreshToken', tokens.refreshToken, {
+            httpOnly: true,
+            secure: false,
+            sameSite: 'Lax',
+            path: '/',
+            maxAge: 7 * 24 * 60 * 60 * 1000,
+        });
+
+        await user.save();
+
+        return res.status(200).send({
+            success: true,
+            message: 'Test login successful',
+            tokens: tokens,
+        });
+    }
+
+    // 🔒 Normal OTP verification flow below
     try {
         const user = await User.findOne({ mobile }).select('+otp +otpExpiresAt');
 
@@ -164,7 +209,6 @@ const HandleConfirmOtp = async (req, res) => {
             maxAge: 60 * 1000 * 60,
         });
 
-        // Refresh Token Cookie
         res.cookie('refreshToken', tokens.refreshToken, {
             httpOnly: true,
             secure: false,
@@ -183,6 +227,7 @@ const HandleConfirmOtp = async (req, res) => {
         res.status(500).send({ success: false, message: 'Internal Server Error', error });
     }
 };
+
 
 
 const HandleRefreshToken = async (req, res) => {
